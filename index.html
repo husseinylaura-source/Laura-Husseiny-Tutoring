@@ -300,7 +300,7 @@ footer .wrap{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
     <div class="sec-head">
       <p class="eyebrow">Book a session</p>
       <h2>My free slots</h2>
-      <p>Pick a green slot for a one-off lesson, or set it to repeat every week (say, every Thursday at 8 pm). I'll confirm by email within 24 hours.</p>
+      <p>Pick a green slot for a one-off lesson, or set it to repeat every week (say, every Thursday at 8 pm). Your request shows as requested straight away, and you'll get a confirmation email once I approve it.</p>
     </div>
     <div class="booking">
       <div style="min-width:0">
@@ -643,7 +643,7 @@ $("#bkForm").addEventListener("submit", e => {
   const keys = runs.length ? runs.map(s => s.key) : [chosen];
   const markRequested = () => { keys.forEach(k => { if (!slotState.has(k)) slotState.set(k, "requested"); }); saveLocal(keys); chosen = null; renderCal(); };
   const sent = () => { markRequested();
-    $("#formWrap").innerHTML = `<div class="done" role="status"><h3>Request sent</h3>${summary}<p>Thanks, ${esc(name)}. Your slot now shows as requested, and I'll confirm by email or WhatsApp within 24 hours.</p></div>`; };
+    $("#formWrap").innerHTML = `<div class="done" role="status"><h3>Requested</h3>${summary}<p>Thanks, ${esc(name)}. Your ${runs.length ? "sessions now show" : "slot now shows"} as requested on the calendar. Once I approve ${runs.length ? "them" : "it"}, you'll get a confirmation email at <b>${esc(email)}</b>, usually within 24 hours.</p></div>`; };
   if (CONFIG.sheetEndpoint) {
     const btn = $("#submitBtn"); btn.disabled = true; btn.textContent = "Sending…";
     fetch(CONFIG.sheetEndpoint, { method:"POST", headers:{ "Content-Type":"text/plain;charset=utf-8" },

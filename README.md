@@ -19,17 +19,19 @@ To use your own domain later (e.g. `laurahusseiny.com`), add it under **Settings
 
 The calendar shows three states: **Available** (green), **Requested** (amber, dashed) and **Booked** (grey).
 When a student sends a request, those slots turn amber for every visitor, you get an email, and the request appears in a Google Sheet.
-To confirm, change the row's Status to **Booked**. To turn it down, choose **Declined**, and the slot becomes available again.
+To confirm, change the row's Status to **Approved**: the student gets a confirmation email from you and the slot shows as Booked. Choose **Declined** and the student gets a polite email and the slot becomes available again.
+Tip for repeating bookings: select all of that student's Status cells, type Approved, and press Ctrl+Enter (Cmd+Enter on Mac) so they get one email listing every date.
 
 One-time setup, about 10 minutes:
 
-1. Go to sheets.google.com and create a blank sheet. Name it "Tutoring bookings".
+1. Go to sheets.google.com (signed in as husseinylaura@gmail.com) and create a blank sheet. Name it "Tutoring bookings".
 2. Click **Extensions → Apps Script**. Delete what's there, paste the whole of `booking-sheet.gs`, and click **Save**.
 3. Click **Deploy → New deployment**. Click the gear icon, choose **Web app**, and set:
    - *Execute as:* **Me**
    - *Who has access:* **Anyone**
 4. Click **Deploy**. Google asks you to authorise it: choose your account → **Advanced** → **Go to (project)** → **Allow**. This lets the script write to your sheet and email you.
 5. Copy the **Web app URL** (it ends in `/exec`).
+   Then, back in the Apps Script editor, pick **setup** in the function menu at the top and click **Run** once. This switches on the approval emails.
 6. In `index.html`, find `sheetEndpoint: ""` and paste the URL between the quotes. Upload the file to GitHub.
 
 A "Requests" tab appears in the sheet with the first request. Visitors only ever see dates, times and status, never names or emails.
@@ -45,7 +47,7 @@ Without this setup, "Requested" only shows on the student's own device, and the 
 On GitHub, open `index.html` → click the pencil icon → change the CONFIG values → **Commit changes**. The live site updates within a minute.
 
 - **New fixed weekly session:** add it under `weeklyBooked` (1 = Monday … 6 = Saturday, 0 = Sunday).
-- **Confirming requests:** change Status in the Google Sheet. No website edit needed.
-- **One-off booking you arranged yourself:** add a row to the sheet with Status Booked, or a line to `booked` in `index.html`.
+- **Confirming requests:** change Status to Approved in the Google Sheet. No website edit needed.
+- **One-off booking you arranged yourself:** add a row to the sheet with Status Approved, or a line to `booked` in `index.html`.
 - **Counters:** change the numbers in `stats`.
 - **Resources:** paste each Stripe, Payhip or Gumroad payment link into `link`. Sale emails come from that platform, so sign up there with husseinylaura@gmail.com.
