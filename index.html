@@ -517,8 +517,8 @@ function bookingsOn(ds){
 /* live slot state: "requested" or "booked", keyed "YYYY-MM-DD HH:MM" */
 const slotState = new Map();
 const LOCAL_KEY = "lh-requested";
-function loadLocal(){ try { (JSON.parse(localStorage.getItem(LOCAL_KEY)) || []).forEach(k => { if (!slotState.has(k)) slotState.set(k, "requested"); }); } catch(e){} }
-function saveLocal(keys){ try { const old = JSON.parse(localStorage.getItem(LOCAL_KEY)) || []; localStorage.setItem(LOCAL_KEY, JSON.stringify([...new Set([...old, ...keys])])); } catch(e){} }
+function loadLocal(){ if (CONFIG.sheetEndpoint) { try { localStorage.removeItem(LOCAL_KEY); } catch(e){} return; } try { (JSON.parse(localStorage.getItem(LOCAL_KEY)) || []).forEach(k => { if (!slotState.has(k)) slotState.set(k, "requested"); }); } catch(e){} }
+function saveLocal(keys){ if (CONFIG.sheetEndpoint) return; try { const old = JSON.parse(localStorage.getItem(LOCAL_KEY)) || []; localStorage.setItem(LOCAL_KEY, JSON.stringify([...new Set([...old, ...keys])])); } catch(e){} }
 function loadSheet(){
   if (!CONFIG.sheetEndpoint) return;
   fetch(CONFIG.sheetEndpoint).then(r => r.json()).then(rows => {
