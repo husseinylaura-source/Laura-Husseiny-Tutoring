@@ -10,6 +10,7 @@
  *  - Change Status to "Declined" → the student gets a polite email, and the slot is free again.
  *
  * ONE-TIME SETUP: after pasting, choose "setup" in the function menu at the top and click Run.
+ * If an email ever doesn't go out, use the Bookings menu in the sheet → "Send confirmation emails now".
  * The website only ever reads Date, Time and Status; names and emails are never shown to visitors.
  */
 
@@ -56,8 +57,8 @@ function activeSlots_() {
   const today = Utilities.formatDate(new Date(), "Asia/Dubai", "yyyy-MM-dd");
   const out = {};
   sheet_().getDataRange().getValues().slice(1).forEach(r => {
-    const status = String(r[COL.status - 1]).trim().toLowerCase();
-    const kind = status === "requested" ? "requested" : (status === "approved" || status === "booked") ? "booked" : null;
+    const raw = String(r[COL.status - 1]).trim().toLowerCase();
+    const kind = raw === "requested" ? "requested" : normStatus_(raw) === "Approved" ? "booked" : null;
     if (!kind) return;
     const date = asDate_(r[COL.date - 1]), time = asTime_(r[COL.time - 1]);
     if (date >= today) out[date + " " + time] = kind;
@@ -81,6 +82,7 @@ function doPost(e) {
   lock.waitLock(20000);
   try {
     const d = JSON.parse(e.postData.contents);
+    d.email = String(d.email || "").trim(); d.name = String(d.name || "").trim();
     const slots = (d.slots || []).filter(s => /^\d{4}-\d{2}-\d{2}$/.test(s.date) && /^\d{2}:\d{2}$/.test(s.time)).slice(0, 20);
     if (!slots.length || !d.name || !/^\S+@\S+\.\S+$/.test(d.email || "")) return json_({ ok: false });
 
@@ -128,13 +130,40 @@ function onStatusChange(e) {
   const sh = range.getSheet();
   const top = Math.max(range.getRow(), 2), bottom = range.getRow() + range.getNumRows() - 1;
   if (bottom < top) return;
-  const rows = sh.getRange(top, 1, bottom - top + 1, HEADERS.length).getValues();
+  emailStudents_(sh, top, sh.getRange(top, 1, bottom - top + 1, HEADERS.length).getValues());
+}
 
+/* ---------- Bookings menu in the sheet ---------- */
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu("Bookings")
+    .addItem("Send confirmation emails now", "sendPendingEmails")
+    .addItem("Switch on automatic emails", "setup")
+    .addToUi();
+}
+
+// Emails every Approved / Declined student who hasn't been emailed yet.
+function sendPendingEmails() {
+  const sh = sheet_();
+  const n = sh.getLastRow() - 1;
+  if (n < 1) return;
+  const sent = emailStudents_(sh, 2, sh.getRange(2, 1, n, HEADERS.length).getValues());
+  try { SpreadsheetApp.getActive().toast(sent ? sent + " email(s) sent" : "Nothing waiting to be sent", "Bookings"); } catch (err) {}
+}
+
+function normStatus_(v) {
+  const s = String(v).trim().toLowerCase();
+  if (s === "approved" || s === "approve" || s === "booked" || s === "confirmed") return "Approved";
+  if (s === "declined" || s === "decline" || s === "rejected") return "Declined";
+  return "";
+}
+
+function emailStudents_(sh, top, rows) {
   // group newly approved / declined rows by request, so a repeating booking gets one email
   const groups = {};
   rows.forEach((r, i) => {
-    const status = String(r[COL.status - 1]).trim();
-    if (status !== "Approved" && status !== "Declined") return;
+    const status = normStatus_(r[COL.status - 1]);
+    if (!status) return;
+    if (!/^\S+@\S+\.\S+$/.test(String(r[COL.email - 1]).trim())) return;
     if (String(r[COL.emailed - 1]).indexOf(status) === 0) return; // already emailed for this status
     const key = r[COL.id - 1] + "|" + status;
     (groups[key] = groups[key] || { status, row: r, items: [] }).items.push({ rowNum: top + i, when: niceDate_(asDate_(r[COL.date - 1]), asTime_(r[COL.time - 1])) });
@@ -161,7 +190,7 @@ function onStatusChange(e) {
         "Best wishes,", MY_NAME
       ];
     MailApp.sendEmail({
-      to: String(r[COL.email - 1]),
+      to: String(r[COL.email - 1]).trim(),
       replyTo: MY_EMAIL,
       name: MY_NAME,
       subject: g.status === "Approved" ? "Your tutoring session is confirmed" : "About your tutoring request",
@@ -170,4 +199,5 @@ function onStatusChange(e) {
     const stamp = g.status + " email sent " + Utilities.formatDate(new Date(), "Asia/Dubai", "d MMM HH:mm");
     g.items.forEach(x => sh.getRange(x.rowNum, COL.emailed).setValue(stamp));
   });
+  return Object.keys(groups).length;
 }
