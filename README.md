@@ -47,6 +47,7 @@ Without this setup, "Requested" only shows on the student's own device, and the 
 On GitHub, open `index.html` → click the pencil icon → change the CONFIG values → **Commit changes**. The live site updates within a minute.
 
 - **New fixed weekly session:** add it under `weeklyBooked` (1 = Monday … 6 = Saturday, 0 = Sunday).
+- **Google Calendar (husseinylaura@gmail.com):** anything in that calendar shows on the site as booked (times only; all-day and "Free" events are ignored), and approved requests are added to it automatically. Easiest way to block a time: just add it to the calendar.
 - **Changing a weekly session for one week only:** add the date to `weeklyBookedSkip`, then add that day's new time to `booked`.
 - **Confirming requests:** change Status to Approved in the Google Sheet. No website edit needed.
 - **One-off booking you arranged yourself:** add a row to the sheet with Status Approved, or a line to `booked` in `index.html`.

@@ -513,19 +513,23 @@ const mins = t => { const [h,m] = t.split(":").map(Number); return h*60+m; };
 function bookingsOn(ds){
   const wb = CONFIG.weeklyBooked, dow = new Date(ds + "T00:00").getDay();
   const weekly = (wb && ds >= wb.startFrom && wb[dow] && !(CONFIG.weeklyBookedSkip || []).includes(ds)) ? wb[dow].map(([from,to]) => ({ from, to })) : [];
-  const fixed = [...CONFIG.booked.filter(b => b.date === ds), ...weekly].map(b => ({ from:mins(b.from), to:mins(b.to), label:`${b.from}–${b.to}`, kind:"booked" }));
+  const fixed = [...CONFIG.booked.filter(b => b.date === ds), ...weekly, ...calBusy.filter(b => b.date === ds)].map(b => ({ from:mins(b.from), to:mins(b.to), label:`${b.from}–${b.to}`, kind:"booked" }));
   const live = [];
   slotState.forEach((st, key) => { const [d, t] = key.split(" "); if (d !== ds) return; const e = mins(t)+CONFIG.slotMinutes, hm = m => pad(Math.floor(m/60))+":"+pad(m%60); live.push({ from:mins(t), to:e, label: st === "booked" ? `${t}–${hm(e)}` : t, kind:st }); });
   return [...fixed, ...live];
 }
 /* live slot state: "requested" or "booked", keyed "YYYY-MM-DD HH:MM" */
 const slotState = new Map();
+/* busy times from Google Calendar (via the sheet), { date, from, to } */
+let calBusy = [];
 const LOCAL_KEY = "lh-requested";
 function loadLocal(){ if (CONFIG.sheetEndpoint) { try { localStorage.removeItem(LOCAL_KEY); } catch(e){} return; } try { (JSON.parse(localStorage.getItem(LOCAL_KEY)) || []).forEach(k => { if (!slotState.has(k)) slotState.set(k, "requested"); }); } catch(e){} }
 function saveLocal(keys){ if (CONFIG.sheetEndpoint) return; try { const old = JSON.parse(localStorage.getItem(LOCAL_KEY)) || []; localStorage.setItem(LOCAL_KEY, JSON.stringify([...new Set([...old, ...keys])])); } catch(e){} }
 function loadSheet(){
   if (!CONFIG.sheetEndpoint) return;
   fetch(CONFIG.sheetEndpoint).then(r => r.json()).then(rows => {
+    calBusy = rows.filter(r => r.status === "busy" && r.from && r.to);
+    rows = rows.filter(r => r.status !== "busy");
     rows.forEach(r => { const k = r.date + " " + r.time; if (r.status === "booked" || !slotState.has(k)) slotState.set(k, r.status); });
     renderCal(); if (chosen) describeChoice();
   }).catch(() => {});

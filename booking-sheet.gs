@@ -9,7 +9,12 @@
  *    and the slot shows as Booked on the website.
  *  - Change Status to "Declined" → the student gets a polite email, and the slot is free again.
  *
+ *  - Approved sessions are added to your Google Calendar (husseinylaura@gmail.com); Declined ones are removed.
+ *  - Anything already in that calendar shows on the website as Booked (times only, never event titles).
+ *    All-day events and events marked "Free" are ignored.
+ *
  * ONE-TIME SETUP: after pasting, choose "setup" in the function menu at the top and click Run.
+ * After updating this code: Deploy → Manage deployments → pencil icon → Version: "New version" → Deploy.
  * If an email ever doesn't go out, use the Bookings menu in the sheet → "Send confirmation emails now".
  * The website only ever reads Date, Time and Status; names and emails are never shown to visitors.
  */
@@ -70,10 +75,81 @@ function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 
+/* ---------- Google Calendar (husseinylaura@gmail.com) ---------- */
+const DUBAI = "Asia/Dubai";
+const SESSION_MINUTES = 60;   // length of one booked slot, same as slotMinutes on the website
+const CAL_DAYS_AHEAD = 120;   // how far ahead the website looks at your calendar
+const CAL_TAG = "lhBooking";  // marks events this script created, so they aren't counted twice
+
+function cal_() { return CalendarApp.getCalendarById(MY_EMAIL) || CalendarApp.getDefaultCalendar(); }
+function at_(ymd, hm) { return Utilities.parseDate(ymd + " " + hm, DUBAI, "yyyy-MM-dd HH:mm"); }
+const fmt_ = (d, p) => Utilities.formatDate(d, DUBAI, p);
+
+// Busy times from your calendar, as { date, from, to } in Dubai time. Only times leave the sheet, never titles.
+// All-day events, events marked "Free", and events you declined are ignored.
+function calendarBusy_() {
+  const start = new Date(), end = new Date(start.getTime() + CAL_DAYS_AHEAD * 864e5);
+  const out = [];
+  cal_().getEvents(start, end).forEach(ev => {
+    if (ev.isAllDayEvent() || ev.getTag(CAL_TAG)) return;
+    if (ev.getMyStatus() === CalendarApp.GuestStatus.NO) return;
+    if (typeof ev.getTransparency === "function" && String(ev.getTransparency()).toUpperCase() === "TRANSPARENT") return;
+    let s = ev.getStartTime(), e = ev.getEndTime();
+    while (s < e) { // split events that run past midnight
+      const day = fmt_(s, "yyyy-MM-dd"), next = at_(fmt_(new Date(s.getTime() + 864e5), "yyyy-MM-dd"), "00:00");
+      const stop = e < next ? e : next;
+      out.push({ date: day, from: fmt_(s, "HH:mm"), to: stop.getTime() === next.getTime() ? "24:00" : fmt_(stop, "HH:mm"), status: "busy" });
+      s = stop;
+    }
+  });
+  return out;
+}
+
+const rowTag_ = r => r[COL.id - 1] + " " + asDate_(r[COL.date - 1]) + " " + asTime_(r[COL.time - 1]);
+function findEvent_(r) {
+  const s = at_(asDate_(r[COL.date - 1]), asTime_(r[COL.time - 1]));
+  const tag = rowTag_(r);
+  return cal_().getEvents(s, new Date(s.getTime() + SESSION_MINUTES * 6e4)).filter(ev => ev.getTag(CAL_TAG) === tag)[0] || null;
+}
+
+// Approved, from today on → an event in your calendar. Declined or back to Requested → its event is removed.
+function syncCalendar_(rows) {
+  const today = fmt_(new Date(), "yyyy-MM-dd");
+  let added = 0;
+  rows.forEach(r => {
+    if (!r[COL.id - 1] || asDate_(r[COL.date - 1]) < today) return;
+    const approved = normStatus_(r[COL.status - 1]) === "Approved";
+    const ev = findEvent_(r);
+    if (approved && !ev) {
+      const s = at_(asDate_(r[COL.date - 1]), asTime_(r[COL.time - 1]));
+      const made = cal_().createEvent("Tutoring: " + r[COL.name - 1] + (r[COL.subject - 1] ? " (" + r[COL.subject - 1] + ")" : ""),
+        s, new Date(s.getTime() + SESSION_MINUTES * 6e4), {
+          description: ["Session: " + r[COL.session - 1], "Where: " + r[COL.mode - 1], "Email: " + r[COL.email - 1],
+                        r[COL.message - 1] ? "Focus: " + r[COL.message - 1] : "", "Booked through your website."].join("\n"),
+          location: String(r[COL.mode - 1] || "")
+        });
+      made.setTag(CAL_TAG, rowTag_(r));
+      added++;
+    } else if (!approved && ev) {
+      ev.deleteEvent();
+    }
+  });
+  return added;
+}
+
+function addApprovedToCalendar() {
+  const sh = sheet_(), n = sh.getLastRow() - 1;
+  const added = n < 1 ? 0 : syncCalendar_(sh.getRange(2, 1, n, HEADERS.length).getValues());
+  try { SpreadsheetApp.getActive().toast(added ? added + " session(s) added to your calendar" : "Your calendar is already up to date", "Bookings"); } catch (err) {}
+}
+
 /* ---------- the website reads the calendar from here ---------- */
 function doGet() {
   const slots = activeSlots_();
-  return json_(Object.keys(slots).map(k => ({ date: k.slice(0, 10), time: k.slice(11), status: slots[k] })));
+  const rows = Object.keys(slots).map(k => ({ date: k.slice(0, 10), time: k.slice(11), status: slots[k] }));
+  let busy = [];
+  try { busy = calendarBusy_(); } catch (err) {}
+  return json_(rows.concat(busy));
 }
 
 /* ---------- the website sends requests here ---------- */
@@ -130,13 +206,16 @@ function onStatusChange(e) {
   const sh = range.getSheet();
   const top = Math.max(range.getRow(), 2), bottom = range.getRow() + range.getNumRows() - 1;
   if (bottom < top) return;
-  emailStudents_(sh, top, sh.getRange(top, 1, bottom - top + 1, HEADERS.length).getValues());
+  const rows = sh.getRange(top, 1, bottom - top + 1, HEADERS.length).getValues();
+  try { syncCalendar_(rows); } catch (err) {}
+  emailStudents_(sh, top, rows);
 }
 
 /* ---------- Bookings menu in the sheet ---------- */
 function onOpen() {
   SpreadsheetApp.getUi().createMenu("Bookings")
     .addItem("Send confirmation emails now", "sendPendingEmails")
+    .addItem("Add approved sessions to my calendar", "addApprovedToCalendar")
     .addItem("Switch on automatic emails", "setup")
     .addToUi();
 }
