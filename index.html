@@ -431,9 +431,13 @@ const CONFIG = {
     { date: "2026-10-14", from: "12:00", to: "13:00" },
     { date: "2026-10-14", from: "17:00", to: "18:00" },
     { date: "2026-10-17", from: "11:30", to: "12:30" },
-    { date: "2026-10-17", from: "13:00", to: "14:00" }
-
+    { date: "2026-10-17", from: "13:00", to: "14:00" },
+    // This week only (replaces the usual Wednesday session on 21 Oct, see weeklyBookedSkip)
+    { date: "2026-10-21", from: "16:00", to: "19:00" },
+    { date: "2026-10-22", from: "17:00", to: "19:30" }
   ],
+  // Dates where the usual weekly booked time does NOT apply (one-off changes go in "booked" above).
+  weeklyBookedSkip: ["2026-10-21"],
   // Booked every week from "startFrom". 1 = Monday … 6 = Saturday, 0 = Sunday.
   weeklyBooked: {
     startFrom: "2026-10-17",
@@ -508,7 +512,7 @@ let chosen = null;
 const mins = t => { const [h,m] = t.split(":").map(Number); return h*60+m; };
 function bookingsOn(ds){
   const wb = CONFIG.weeklyBooked, dow = new Date(ds + "T00:00").getDay();
-  const weekly = (wb && ds >= wb.startFrom && wb[dow]) ? wb[dow].map(([from,to]) => ({ from, to })) : [];
+  const weekly = (wb && ds >= wb.startFrom && wb[dow] && !(CONFIG.weeklyBookedSkip || []).includes(ds)) ? wb[dow].map(([from,to]) => ({ from, to })) : [];
   const fixed = [...CONFIG.booked.filter(b => b.date === ds), ...weekly].map(b => ({ from:mins(b.from), to:mins(b.to), label:`${b.from}–${b.to}`, kind:"booked" }));
   const live = [];
   slotState.forEach((st, key) => { const [d, t] = key.split(" "); if (d !== ds) return; const e = mins(t)+CONFIG.slotMinutes, hm = m => pad(Math.floor(m/60))+":"+pad(m%60); live.push({ from:mins(t), to:e, label: st === "booked" ? `${t}–${hm(e)}` : t, kind:st }); });
